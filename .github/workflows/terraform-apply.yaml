@@ -1,0 +1,106 @@
+name: Apply
+on:
+    push:
+        branches:
+        - main
+        - 'test**'
+      
+env:
+  BACKEND_BUCKET: mystatedemobucket
+  BACKEND_REGION: "eu-west-1"
+jobs:
+  Terraform:   
+    runs-on: codebuild-codebuild-githubaction-${{ github.run_id }}-${{ github.run_attempt }}
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "TF_VAR_prefix=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+      - run: echo $TF_VAR_prefix
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.1
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend-config="key=$TF_VAR_prefix" -backend-config="region=$BACKEND_REGION" -backend-config="bucket=$BACKEND_BUCKET"
+      
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -out tfplan -no-color
+        continue-on-error: false
+      - name: Publish Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-artifact
+          path: "tfplan"
+  # create_secret:
+  #   environment: dev
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     token: ${{ steps.create_token.outputs.token }}
+  #   steps:
+  #     - id: create_token
+  #       uses: tibdex/github-app-token@v2
+  #       with:
+  #         app_id: ${{ secrets.APP_ID }}
+
+  #         # Optional.
+  #         # github_api_url: https://api.example.com
+
+  #         # Optional.
+  #         installation_retrieval_mode: repository
+
+  #         # Optional.
+  #         #installation_retrieval_payload: tibdex/github-app-token
+
+  #         # Optional.
+  #         # Using a YAML multiline string to avoid escaping the JSON quotes.
+  #         # permissions: >-
+  #         #   {"pull_requests": "read"}
+
+  #         private_key: ${{ secrets.PRIVATE_KEY }}
+
+  #         # Optional.
+  #         # repositories: >-
+  #         #   ["actions/toolkit", "github/docs"]
+
+  #         # Optional.
+  #         # revoke: false
+
+  #     - run: "echo 'The created token is masked: ${{ steps.create_token.outputs.token }}'"
+  #     - uses: trstringer/manual-approval@v1
+  #       with:
+  #         secret: ${{ steps.create_token.outputs.token }}
+  #         approvers: chakch
+  #         minimum-approvals: 1
+  #         issue-title: "Deploying v1.3.5 to prod from staging"
+  #         issue-body: "Please approve or deny the deployment of version v1.3.5."
+  #         exclude-workflow-initiator-as-approver: false
+  #         additional-approved-words: ''
+  #         additional-denied-words: ''
+  Terraform-apply:   
+    runs-on: codebuild-codebuild-project-${{ github.run_id }}-${{ github.run_attempt }}
+    environment: dev
+    needs : ["Terraform"]
+    steps:
+    - run: echo "TF_VAR_prefix=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+    - run: echo $TF_VAR_prefix
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        # Name of the artifact to download.
+        # If unspecified, all artifacts for the run are downloaded.
+        # Optional.
+        name: my-artifact
+    - uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.5.1
+    - name: Terraform Init
+      id: init
+      run: terraform init -backend-config="key=$TF_VAR_prefix" -backend-config="region=$BACKEND_REGION" -backend-config="bucket=$BACKEND_BUCKET"
+      
+    - name: Terraform apply
+      id: apply
+      run: terraform apply tfplan
