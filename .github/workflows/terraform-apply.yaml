@@ -10,7 +10,7 @@ env:
   BACKEND_REGION: "eu-west-1"
 jobs:
   Terraform:   
-    runs-on: codebuild-codebuild-githubaction-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: codebuild-codebuild-project-${{ github.run_id }}-${{ github.run_attempt }}
     environment: dev
     steps:
       - uses: actions/checkout@v4
